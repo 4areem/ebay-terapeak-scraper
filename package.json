@@ -1,0 +1,27 @@
+{
+  "name": "ebay-terapeak-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "scrape": "tsx src/index.ts",
+    "login": "tsx src/login.ts",
+    "recon": "tsx src/recon.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "rebrowser-playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.0",
+    "playwright": "^1.52.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

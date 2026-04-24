@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+cookies/
+data/
+recon/
+config/accounts.json
+*.log
+.DS_Store

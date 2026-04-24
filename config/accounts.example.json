@@ -1,0 +1,16 @@
+[
+  {
+    "label": "account_1",
+    "cookiePath": "./cookies/account_1.json",
+    "proxy": null
+  },
+  {
+    "label": "account_2",
+    "cookiePath": "./cookies/account_2.json",
+    "proxy": {
+      "server": "http://proxy.example.com:8000",
+      "username": "REPLACE_ME",
+      "password": "REPLACE_ME"
+    }
+  }
+]
