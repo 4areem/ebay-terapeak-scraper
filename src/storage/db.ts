@@ -1,11 +1,15 @@
 import Database from "better-sqlite3";
 import { readFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { SoldListingRecord } from "../scraper/types.js";
+import type { MobileListingRow, WebFormatRow } from "../scraper/types.js";
+
+export type ScrapeSource = "mobile" | "web";
+export type ScrapeStatus = "pending" | "done" | "error";
 
 export class Store {
   private db: Database.Database;
-  private upsertStmt: Database.Statement;
+  private mobileUpsert: Database.Statement;
+  private webUpsert: Database.Statement;
   private progressStmt: Database.Statement;
 
   constructor(dbPath: string) {
@@ -17,29 +21,44 @@ export class Store {
     const schema = readFileSync(resolve("src/storage/schema.sql"), "utf-8");
     this.db.exec(schema);
 
-    this.upsertStmt = this.db.prepare(`
-      INSERT INTO sold_listings
-        (item_id, item_title, listing_format, sold_price, sold_date, sold_time,
-         bids, image_url, shipping_price, slice_id)
+    this.mobileUpsert = this.db.prepare(`
+      INSERT INTO mobile_listings
+        (item_id, marketplace, item_title, image_url,
+         avg_sold_price, avg_sold_currency, avg_shipping, avg_shipping_currency,
+         last_sold_datetime, end_date, item_on_hold, slice_id)
       VALUES
-        (@itemId, @itemTitle, @listingFormat, @soldPrice, @soldDate, @soldTime,
-         @bids, @imageUrl, @shippingPrice, @sliceId)
-      ON CONFLICT(item_id) DO UPDATE SET
-        item_title     = excluded.item_title,
+        (@itemId, @marketplace, @itemTitle, @imageUrl,
+         @avgSoldPrice, @avgSoldCurrency, @avgShipping, @avgShippingCurrency,
+         @lastSoldDatetime, @endDate, @itemOnHold, @sliceId)
+      ON CONFLICT(item_id, marketplace) DO UPDATE SET
+        item_title             = excluded.item_title,
+        image_url              = excluded.image_url,
+        avg_sold_price         = excluded.avg_sold_price,
+        avg_sold_currency      = excluded.avg_sold_currency,
+        avg_shipping           = excluded.avg_shipping,
+        avg_shipping_currency  = excluded.avg_shipping_currency,
+        last_sold_datetime     = excluded.last_sold_datetime,
+        end_date               = excluded.end_date,
+        item_on_hold           = excluded.item_on_hold,
+        slice_id               = excluded.slice_id,
+        scraped_at             = datetime('now')
+    `);
+
+    this.webUpsert = this.db.prepare(`
+      INSERT INTO web_format_lookup
+        (item_id, marketplace, listing_format, bids)
+      VALUES
+        (@itemId, @marketplace, @listingFormat, @bids)
+      ON CONFLICT(item_id, marketplace) DO UPDATE SET
         listing_format = excluded.listing_format,
-        sold_price     = excluded.sold_price,
-        sold_date      = excluded.sold_date,
-        sold_time      = excluded.sold_time,
         bids           = excluded.bids,
-        image_url      = excluded.image_url,
-        shipping_price = excluded.shipping_price,
         scraped_at     = datetime('now')
     `);
 
     this.progressStmt = this.db.prepare(`
-      INSERT INTO scrape_progress (slice_id, page, status, records_found, error)
-      VALUES (@sliceId, @page, @status, @recordsFound, @error)
-      ON CONFLICT(slice_id, page) DO UPDATE SET
+      INSERT INTO scrape_progress (source, slice_id, cursor, status, records_found, error)
+      VALUES (@source, @sliceId, @cursor, @status, @recordsFound, @error)
+      ON CONFLICT(source, slice_id, cursor) DO UPDATE SET
         status        = excluded.status,
         records_found = excluded.records_found,
         error         = excluded.error,
@@ -47,29 +66,44 @@ export class Store {
     `);
   }
 
-  insertRecords(sliceId: string, records: SoldListingRecord[]): void {
-    const tx = this.db.transaction((rows: SoldListingRecord[]) => {
-      for (const r of rows) {
-        this.upsertStmt.run({ ...r, sliceId });
+  insertMobileRows(rows: MobileListingRow[]): void {
+    const tx = this.db.transaction((batch: MobileListingRow[]) => {
+      for (const r of batch) {
+        this.mobileUpsert.run({
+          ...r,
+          itemOnHold: r.itemOnHold === null ? null : r.itemOnHold ? 1 : 0,
+        });
       }
     });
-    tx(records);
+    tx(rows);
+  }
+
+  insertWebRows(rows: WebFormatRow[]): void {
+    const tx = this.db.transaction((batch: WebFormatRow[]) => {
+      for (const r of batch) {
+        this.webUpsert.run(r);
+      }
+    });
+    tx(rows);
   }
 
   markProgress(
+    source: ScrapeSource,
     sliceId: string,
-    page: number,
-    status: "pending" | "done" | "error",
+    cursor: number,
+    status: ScrapeStatus,
     recordsFound: number | null,
     error: string | null,
   ): void {
-    this.progressStmt.run({ sliceId, page, status, recordsFound, error });
+    this.progressStmt.run({ source, sliceId, cursor, status, recordsFound, error });
   }
 
-  isPageDone(sliceId: string, page: number): boolean {
+  isCursorDone(source: ScrapeSource, sliceId: string, cursor: number): boolean {
     const row = this.db
-      .prepare(`SELECT status FROM scrape_progress WHERE slice_id = ? AND page = ?`)
-      .get(sliceId, page) as { status: string } | undefined;
+      .prepare(
+        `SELECT status FROM scrape_progress WHERE source = ? AND slice_id = ? AND cursor = ?`,
+      )
+      .get(source, sliceId, cursor) as { status: string } | undefined;
     return row?.status === "done";
   }
 
