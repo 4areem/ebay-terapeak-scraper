@@ -8,3 +8,4 @@ recon/
 config/accounts.json
 *.log
 .DS_Store
+data/graphql-requests/

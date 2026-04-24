@@ -15,6 +15,7 @@ from pathlib import Path
 from mitmproxy import ctx, http
 
 TOKEN_PATH = Path(__file__).resolve().parent.parent / "data" / "token.txt"
+QUERIES_DIR = Path(__file__).resolve().parent.parent / "data" / "graphql-requests"
 TARGET_HOST = "apisd.ebay.com"
 TARGET_PATH_PREFIX = "/graphql"
 
@@ -23,6 +24,7 @@ class TokenExtractor:
     def __init__(self) -> None:
         self.last_token: str | None = None
         TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+        QUERIES_DIR.mkdir(parents=True, exist_ok=True)
 
     def load(self, loader) -> None:
         ctx.log.info(f"TokenExtractor loaded, writing tokens to {TOKEN_PATH}")
@@ -39,13 +41,27 @@ class TokenExtractor:
             return
 
         token = auth[len("Bearer "):].strip()
-        if not token or token == self.last_token:
-            return
+        if token and token != self.last_token:
+            self._write(token)
+            self.last_token = token
+            ts = time.strftime("%H:%M:%S")
+            ctx.log.info(f"[{ts}] token captured ({len(token)} chars) -> {TOKEN_PATH}")
 
-        self._write(token)
-        self.last_token = token
-        ts = time.strftime("%H:%M:%S")
-        ctx.log.info(f"[{ts}] token captured ({len(token)} chars) -> {TOKEN_PATH}")
+        self._dump_body(flow)
+
+    def _dump_body(self, flow: http.HTTPFlow) -> None:
+        body = flow.request.get_text() or ""
+        op = "unknown"
+        try:
+            import json
+            parsed = json.loads(body)
+            op = parsed.get("operationName") or "unknown"
+        except Exception:
+            pass
+        ts = time.strftime("%Y%m%dT%H%M%S")
+        path = QUERIES_DIR / f"{ts}_{op}.json"
+        path.write_text(body, encoding="utf-8")
+        ctx.log.info(f"graphql req dumped: op={op} -> {path.name}")
 
     def _write(self, token: str) -> None:
         tmp = TOKEN_PATH.with_suffix(".tmp")
