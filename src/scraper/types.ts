@@ -1,11 +1,12 @@
 export type Marketplace = "EBAY-US" | "EBAY-UK";
 
 export interface SearchSlice {
-  id: string;          // e.g. "2023-04-EBAY-US"
+  id: string;          // e.g. "topps-premier-league-chrome__2023-04__EBAY-US"
+  keyword: string;     // title passed to the graphql query
   marketplace: Marketplace;
   month: string;       // "YYYY-MM"
   dateFrom: string;    // ISO-8601 start (inclusive)
-  dateTo: string;      // ISO-8601 end (exclusive)
+  dateTo: string;      // ISO-8601 end (inclusive)
 }
 
 export interface MobileListingRow {
