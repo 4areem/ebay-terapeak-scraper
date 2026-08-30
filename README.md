@@ -107,3 +107,7 @@ tools/        Python helpers
 config/       accounts.json etc. (gitignored except .example)
 data/         SQLite DB + token (gitignored)
 ```
+
+---
+
+> This repository's history was cleaned of internal setup notes and private client communications before being made public.
